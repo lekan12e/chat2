@@ -75,7 +75,38 @@ const verifyEmail = async (req, res) => {
     // Ensure the user hasn't already been verified
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).send({ message: "Email is already verified." });
+      if (existingUser.verified === false) {
+        await User.findOneAndUpdate(
+          { email: existingUser.email }, // Find user by email
+          { $set: { verified: true } }, // Update `verified` field to true
+          { new: true } // Return the updated document
+        );
+      }
+      return res.status(400).send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Email Verification</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          text-align: center;
+          margin-top: 50px;
+          color: #333;
+        }
+        h1 {
+          color: #4CAF50;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Email Already Verified</h1>
+      <p>You can now <a href="http://localhost:3000" style="color: #4CAF50; text-decoration: none;">log in</a>.</p>
+    </body>
+    </html>
+  `);
     }
 
     const salt = await bcrypt.genSalt(10);
