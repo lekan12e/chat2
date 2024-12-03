@@ -1,12 +1,22 @@
 import User from "../models/user.mode.js";
 import bcrypt from "bcrypt";
 import generateToken from "../utils/tokenGenerator.js";
+import jwt from "jsonwebtoken";
+import sendEmail from "../utils/sendEmail.js";
 
 const signup = async (req, res) => {
   try {
-    const { username, fullname, password, confirmPassword, gender } = req.body;
+    const { username, fullname, email, password, confirmPassword, gender } =
+      req.body;
 
-    if (!username || !password || !confirmPassword || !gender || !fullname) {
+    if (
+      !username ||
+      !email ||
+      !password ||
+      !confirmPassword ||
+      !gender ||
+      !fullname
+    ) {
       return res.status(403).send({ message: "All fields are required" });
     }
 
@@ -19,12 +29,57 @@ const signup = async (req, res) => {
     }
 
     const userExists = await User.findOne({ username });
-    if (userExists) {
-      return res.status(403).send({ message: "Username already exists" });
+    const emailExists = await User.findOne({ email });
+    if (userExists || emailExists) {
+      return res
+        .status(403)
+        .send({ message: "Username or email already exists" });
+    }
+
+    const verificationToken = jwt.sign(
+      { username, fullname, email, password, gender },
+      process.env.ACCESS_TOKEN,
+      { expiresIn: "1h" }
+    );
+
+    const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${verificationToken}`;
+    await sendEmail(
+      email,
+      "Verify Your Email",
+      `<p>Click <a href="${verificationUrl}">here</a> to verify your email.</p>`
+    );
+
+    res.status(200).send({
+      message:
+        "Verification email sent. Please check your inbox to verify your account.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "An error occurred during signup" });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res
+        .status(400)
+        .send({ message: "Verification token is required." });
+    }
+
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN);
+    const { username, fullname, email, password, gender } = decoded;
+
+    // Ensure the user hasn't already been verified
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).send({ message: "Email is already verified." });
     }
 
     const salt = await bcrypt.genSalt(10);
-    const hashpassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const profilePicture =
       gender === "male"
@@ -34,46 +89,46 @@ const signup = async (req, res) => {
     const user = new User({
       username,
       fullname,
-      password: hashpassword,
+      email,
+      password: hashedPassword,
       gender,
       profilePicture,
+      verified: true, // Mark user as verified
     });
 
-    if (user) {
-      const { username, fullname, gender, profilePicture } = user;
-      const newUser = {
-        id: user._id,
-        username,
-        fullname,
-        gender,
-        profilePicture,
-      };
-      generateToken(newUser, res);
-      await user.save();
-    }
+    await user.save();
 
-    console.log({
-      id: user._id,
-      fullname: user.fullname,
-      username: user.username,
-      gender: user.gender,
-    });
-
-    res.status(201).send({
-      message: "User created successfully",
-      user: {
-        id: user._id,
-        fullname: user.fullname,
-        username: user.username,
-        gender: user.gender,
-        picture: user.profilePicture,
-      },
-    });
+    res.status(200).send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Email Verification</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          text-align: center;
+          margin-top: 50px;
+          color: #333;
+        }
+        h1 {
+          color: #4CAF50;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Email Verified Successfully!</h1>
+      <p>You can now <a href="http://localhost:3000" style="color: #4CAF50; text-decoration: none;">log in</a>.</p>
+    </body>
+    </html>
+  `);
   } catch (error) {
     console.error(error);
-    res.status(500).send({ message: "An error occurred during signup" });
+    res.status(400).send({ message: "Invalid or expired token." });
   }
 };
+
 const login = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -123,4 +178,4 @@ const logout = async (req, res) => {
   }
 };
 
-export { login, signup, logout };
+export { login, signup, logout, verifyEmail };

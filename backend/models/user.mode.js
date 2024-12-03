@@ -1,4 +1,4 @@
-import mongoose, { Types } from "mongoose";
+import mongoose from "mongoose";
 
 const UserSchema = mongoose.Schema(
   {
@@ -11,10 +11,15 @@ const UserSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+    },
     password: {
       type: String,
       required: true,
-      minlenght: 6,
+      minlength: 6,
     },
     gender: {
       type: String,
@@ -24,6 +29,10 @@ const UserSchema = mongoose.Schema(
     profilePicture: {
       type: String,
       default: "",
+    },
+    verified: {
+      type: Boolean,
+      default: false, // User is not verified initially
     },
   },
   {

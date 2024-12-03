@@ -1,10 +1,17 @@
-import e from "express";
-import { login, logout, signup } from "../controllers/auth.controller.js";
+import express from "express";
+import {
+  login,
+  logout,
+  signup,
+  verifyEmail,
+} from "../controllers/auth.controller.js";
+import limiter from "../middlewares/rateLimit.js";
 
-const router = e.Router();
+const router = express.Router();
 
-router.post("/signup", signup);
-router.post("/login", login);
+router.post("/signup", limiter, signup);
+router.post("/login", limiter, login);
 router.post("/logout", logout);
+router.get("/verify-email", verifyEmail);
 
 export default router;
